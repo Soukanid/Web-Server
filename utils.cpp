@@ -23,12 +23,18 @@ std::string rtrim_copy(std::string str)
 
 int countIndent(const std::string& line)
 {
-    size_t indent = 0;
-    while (indent <= line.size() && (line[indent] == ' ' || line[indent] == '\t'))
+    int spaces = 0;
+
+    for(int i = 0; i < (int)line.length(); i++)
     {
-        indent++;
+        if (line[i] == ' ')
+            spaces++;
+        else if (line[i] == '\t')
+            throw std::runtime_error("Tabs are not allowed for indentation");
+        else
+            break;
     }
-    return indent;
+    return spaces;
 }
 
 std::string trim(const std::string& str)

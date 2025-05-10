@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include "WebservException.hpp"
 #include <fstream>
 #include <map>
 #include <sys/stat.h>
@@ -36,6 +37,9 @@ private:
     std::map<int, std::string> _error_pages;
     std::vector<std::string> _methods;
     std::map<std::string, std::string> _cgi;
+
+public:
+    bool inErrorPage;
 
 public:
     ConfigData();
@@ -73,6 +77,15 @@ public:
 
 
     void parseConfigData();
+    void parseLocationDirective(int indent, int firstIndent,std::string line, Location* currentLocation);
+    void parseLocation(const std::string& value);
+    void parseServerDirective(std::string line, int &firstIndent, std::string& currentKey, Location*& currentLocation, int& currentIndent, int indent);
+    void createNewLocation(std::string value, Location*& currentLocation);
+    void handleServerConfigDirective(const std::string& key, const std::string& value);
+    void parseArrayValue(std::string value, std::vector<std::string>& target);
+    void parseCgiPair(const std::string& value, std::map<std::string, std::string>& target);
+    void parseBodySize(const std::string& value);
+    void parseErrorPage(const std::string& value);
     void printData();
 };
 
