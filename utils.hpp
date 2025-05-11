@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 std::string trim(const std::string& str, const std::string& chars_to_trim);
+int	ft_atoi(const char *nptr);
 std::string& rtrim(std::string& str);
 std::string rtrim_copy(std::string str);
 int countIndent(const std::string& line);

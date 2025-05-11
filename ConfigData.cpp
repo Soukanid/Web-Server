@@ -136,21 +136,19 @@ void ConfigData::addCgi(std::string extension, std::string interpreter)
 
 void ConfigData::parseConfigData()
 {
-    bool inLocations = false;
-    bool baseIndent = 0;
-    Location* currentLocation = NULL;
+    int baseIndent = 0;
     std::vector<std::string>::iterator it;
 
     _port = -1;
     for (it = _content.begin(); it != _content.end(); ++it)
     {
-        std::string line = rtrim(*it);    
+        std::string line = rtrim(*it);
         if (line.find("server:") == 0 || line.empty())
             continue;
         size_t colonPos = line.find(':');
         std::string key;
 
-        if(!baseIndent)
+        if(baseIndent == 0)
             baseIndent = countIndent(line);
         if (baseIndent != countIndent(line))
             throw WebservException("Configuration file : wrong indentation");
@@ -159,6 +157,7 @@ void ConfigData::parseConfigData()
 
         key = line.substr(0, colonPos);
         std::string value = trim(line.substr(colonPos + 1));
+        key = trim(key);
         if (key == "host")
         {
             if (!_host.empty())
@@ -168,7 +167,9 @@ void ConfigData::parseConfigData()
         else if (key == "port")
         {
             // check if post is duplicated and check for the port if is in the range
-            _port = atoi(value.c_str());
+            _port = ft_atoi(value.c_str());
+            if (_port > 65536)
+                throw WebservException("Configuration file : unvalid Port number");
         }
         else if (key == "server_name")
         {
@@ -182,27 +183,197 @@ void ConfigData::parseConfigData()
         }
         else if (key == "locations")
         {
-            createNewLocation(value, currentLocation);
+            if (!value.empty())
+                throw WebservException("Configuration file : invalid config file");
+            int baseIndent2 = 0;
+            it++;
             while (1)
             {
-
+                line = rtrim(*it);
+                if (line.empty())
+                    continue;
+                if (baseIndent >= countIndent(line) || it == _content.end())
+                {
+                    it--;
+                    break ;
+                }
+                parseLine(line, key, value, baseIndent2);
+                if (!value.empty())
+                    throw WebservException("Configuration file : invalid config file");
+                int baseIndent3 = 0;
+                it++;   
+                Location currentLocation;
+                currentLocation.path = key;
+                while(1)
+                {
+                    line = rtrim(*it);
+                    if (line.empty())
+                        continue;
+                    if (baseIndent2 >= countIndent(line) || it == _content.end())
+                        break ;
+                    parseLine(line, key, value, baseIndent3);
+                    parseLocation(key, value, currentLocation);
+                    it++;
+                }
+                _locations.push_back(currentLocation);
             }
-            parseLocation(value);
         }
-        else if (key == "error_page" || inErrorPage == true)
+        else if (key == "error_page")
         {
-            parseErrorPage(value);
+            if (!value.empty())
+                throw WebservException("Configuration file : invalid config file");
+            int baseIndent2 = 0;
+            it++;
+            while (1)
+            {
+                if (it == _content.end())
+                {
+                    it--;
+                    break;
+                }
+                line = rtrim(*it);
+                if (line.empty())
+                    continue;
+                if (baseIndent >= countIndent(line))
+                {
+                    it--;
+                    break ;
+                }
+                parseLine(line, key, value, baseIndent2);
+                int code = atoi(key.c_str());
+                _error_pages[code] = value;
+                /*parseErrorPage(value);*/
+                it++;
+            }
         }
+        else
+            throw WebservException("Configuration file : invalid key");
     }
 }
 
-void ConfigData::createNewLocation(std::string value, Location*& currentLocation)
+void    ConfigData::parseLine(std::string line, std::string &key, std::string &value, int &baseIndent)
 {
-    std::string path = trim(value, " \"'");
-    _locations[path] = Location();
-    _locations[path].path = path;
-    currentLocation = &_locations[path];
+
+    size_t colonPos = line.find(':');
+    if (baseIndent == 0)
+        baseIndent = countIndent(line);
+    if (baseIndent != countIndent(line))
+        throw WebservException("Configuration file : wrong indentation");
+    if (colonPos == std::string::npos)
+        throw WebservException("Configuration file : Invalid format");
+
+    key = line.substr(0, colonPos);
+    value = trim(line.substr(colonPos + 1));
+    key = trim(key);
 }
+
+void    ConfigData::parseLocation(std::string key, std::string value, Location &currentLocation)
+{
+    if (key == "methods")
+    {
+        parseArrayValue(value, currentLocation.methods);
+    }
+    else if (key == "root")
+    {
+        if (!currentLocation.root.empty())
+            throw WebservException("Configuration File: duplicated key");
+        currentLocation.root = value;
+    }
+    else if (key == "index")
+    {
+        if (!currentLocation.index.empty())
+            throw WebservException("Configuration File: duplicated key");
+        parseArrayValue(value, currentLocation.index);
+    }
+    else if (key == "autoindex")
+    {
+        currentLocation.autoindex = (value == "on" || value == "true");
+    }
+    else if (key == "cgi")
+    {
+        parseCgiPair(value, currentLocation.cgi);
+    }
+    else
+    {
+        throw WebservException("Configuration file : invalid key");
+    }
+}
+
+/*void ConfigData::parseErrorPage(const std::string& value)*/
+/*{*/
+/*    size_t colonPos = value.find(':');*/
+/**/
+/*    if (colonPos != std::string::npos)*/
+/*    {*/
+/*        int code = atoi(value.substr(0, colonPos).c_str());*/
+/*        std::string path = trim(value.substr(colonPos + 1));*/
+/*        _error_pages[code] = path;*/
+/*        inErrorPage = true;*/
+/*    }*/
+/*    else */
+/*        throw WebservException("Configuration File : invalid error_page");*/
+/*}*/
+
+void ConfigData::parseBodySize(const std::string& value)
+{
+    if (value.empty())
+        return;
+
+    size_t multiplier = 1;
+    std::string sizeValue = value;
+    char lastChar = tolower(value[value.size() - 1]);
+
+    if (lastChar == 'k')
+    {
+        multiplier = 1024;
+        sizeValue = value.substr(0, value.size() - 1);
+    }
+    else if (lastChar == 'm')
+    {
+        multiplier = 1024 * 1024;
+        sizeValue = value.substr(0, value.size() - 1);
+    }
+
+    _client_max_body_size = ft_atoi(sizeValue.c_str()) * multiplier;
+    /*if (_client_max_body_size < 0)*/
+    /*    throw WebservException("Configuration file : invalid body size");*/
+}
+
+void ConfigData::parseCgiPair(const std::string& value, std::map<std::string, std::string>& target)
+{
+    size_t colonPos = value.find(':');
+    if (colonPos != std::string::npos)
+    {
+        std::string ext = trim(value.substr(0, colonPos));
+        std::string interpreter = trim(value.substr(colonPos + 1));
+        target[ext] = interpreter;
+    }
+}
+
+void ConfigData::parseArrayValue(std::string value, std::vector<std::string>& target)
+{
+    if (value[0] == '[')
+    {
+        value = value.substr(1, value.size() - 2);
+        std::vector<std::string> items = split(value, ',');
+        for (size_t i = 0; i < items.size(); i++)
+        {
+            target.push_back(trim(items[i], " \"'"));
+        }
+    }
+    else
+    {
+        target.push_back(value);
+    }
+}
+
+/*void ConfigData::createNewLocation(std::string value, Location& currentLocation)*/
+/*{*/
+/*    std::string path = trim(value, " \"'");*/
+/*    _locations[path] = Location();*/
+/*    _locations[path].path = path;*/
+/*    currentLocation = _locations[path];*/
+/*}*/
 
 void ConfigData::printData()
 {
@@ -218,29 +389,29 @@ void ConfigData::printData()
     std::cout << std::endl;
 
     std::cout << "Locations:" << std::endl;
-    std::map<std::string, Location>::const_iterator loc_it;
+    std::vector<Location>::const_iterator loc_it;
     for (loc_it = _locations.begin(); loc_it != _locations.end(); ++loc_it)
     {
         std::cout << "-------------------------------------------------\n";
-        std::cout << "  " << loc_it->first << ":" << std::endl;
-        std::cout << "    Root: " << loc_it->second.root << std::endl;
-        
+        std::cout << "  " << loc_it->path << ":" << std::endl;  // Assuming 'path' is the member name instead of 'first'
+        std::cout << "    Root: " << loc_it->root << std::endl;
+    
         std::cout << "    Index: ";
-        for (size_t i = 0; i < loc_it->second.index.size(); ++i)
-            std::cout << loc_it->second.index[i] << (i != loc_it->second.index.size() - 1 ? ", " : "");
+        for (size_t i = 0; i < loc_it->index.size(); ++i)
+            std::cout << loc_it->index[i] << (i != loc_it->index.size() - 1 ? ", " : "");
         std::cout << std::endl;
 
         std::cout << "    Methods: ";
-        for (size_t i = 0; i < loc_it->second.methods.size(); ++i)
-            std::cout << loc_it->second.methods[i] << (i != loc_it->second.methods.size() - 1 ? ", " : "");
+        for (size_t i = 0; i < loc_it->methods.size(); ++i)
+            std::cout << loc_it->methods[i] << (i != loc_it->methods.size() - 1 ? ", " : "");
         std::cout << std::endl;
 
-        std::cout << "    Autoindex: " << (loc_it->second.autoindex ? "on" : "off") << std::endl;
+        std::cout << "    Autoindex: " << (loc_it->autoindex ? "on" : "off") << std::endl;
 
         std::cout << "    CGI: ";
-        std::map<std::string, std::string>::const_iterator cgi_it;
-        for (cgi_it = loc_it->second.cgi.begin(); cgi_it != loc_it->second.cgi.end(); ++cgi_it)
-            std::cout << cgi_it->first << ":" << cgi_it->second << (cgi_it != --loc_it->second.cgi.end() ? ", " : "");
+        /*std::map<std::string, std::string>::const_iterator cgi_it;*/
+        /*for (cgi_it = loc_it->cgi.begin(); cgi_it != loc_it->cgi.end(); ++cgi_it)*/
+        /*    std::cout << cgi_it->first << ":" << cgi_it->second << (std::next(cgi_it) != loc_it->cgi.end() ? ", " : "");*/
         std::cout << std::endl;
         std::cout << "-------------------------------------------------\n";
     }

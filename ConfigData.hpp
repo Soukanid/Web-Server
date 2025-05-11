@@ -25,7 +25,7 @@ public:
 class ConfigData
 {
 private:
-    std::map<std::string, Location> _locations;
+    std::vector<Location> _locations;
     std::vector<std::string> _content;
     std::string _host;
     int _port;
@@ -77,10 +77,10 @@ public:
 
 
     void parseConfigData();
-    void parseLocationDirective(int indent, int firstIndent,std::string line, Location* currentLocation);
-    void parseLocation(const std::string& value);
+    void parseLine(std::string line, std::string &key, std::string &value, int &baseIndent);
+    void parseLocation(std::string key, std::string value, Location &currentLocation);
     void parseServerDirective(std::string line, int &firstIndent, std::string& currentKey, Location*& currentLocation, int& currentIndent, int indent);
-    void createNewLocation(std::string value, Location*& currentLocation);
+    void createNewLocation(std::string value, Location& currentLocation);
     void handleServerConfigDirective(const std::string& key, const std::string& value);
     void parseArrayValue(std::string value, std::vector<std::string>& target);
     void parseCgiPair(const std::string& value, std::map<std::string, std::string>& target);
